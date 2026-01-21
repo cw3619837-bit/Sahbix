@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="shortcut icon" href="https://iconmonstr.com/wp-content/releases/preview/2013/96/iconmonstr-youtube-9.png" type="x-icon">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sahbix</title>
+    <style>
+        :root {
+            --bg-color: #0f0f0f;
+            --sidebar-color: #0f0f0f;
+            --card-hover: #272727;
+            --yt-red: #ff0000;
+            --text-main: #ffffff;
+            --text-dim: #aaaaaa;
+        }
+
+        body { 
+            background: var(--bg-color); 
+            color: var(--text-main); 
+            font-family: "Roboto", Arial, sans-serif; 
+            margin: 0; 
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        nav {
+            width: 240px;
+            background: var(--sidebar-color);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-right: 1px solid #333;
+        }
+
+        nav button {
+            background: transparent;
+            color: white;
+            border: none;
+            padding: 12px;
+            text-align: left;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        nav button:hover { background: var(--card-hover); }
+
+        main {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            position: sticky;
+            top: 0;
+            background: var(--bg-color);
+            padding: 10px 0;
+            z-index: 100;
+        }
+
+        .search-box {
+            display: flex;
+            flex: 1;
+            max-width: 600px;
+            position:relative;
+            left: 250px;
+        }
+
+        input {
+            flex: 1;
+            padding: 12px;
+            background: #121212;
+            border: 1px solid #333;
+            color: white;
+            border-radius: 40px 0 0 40px;
+            outline: none;
+        }
+
+        .search-btn {
+            padding: 0 20px;
+            background: #222;
+            border: 1px solid #333;
+            border-left: none;
+            color: white;
+            border-radius: 0 40px 40px 0;
+            cursor: pointer;
+        }
+
+        #video-display { 
+            width: 100%; 
+            aspect-ratio: 16/9; 
+            background: #000;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            overflow: hidden;
+            display: none;
+        }
+
+        iframe { width: 100%; height: 100%; border: none; }
+
+        #results-list { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); 
+            gap: 20px; 
+        }
+
+        /* Styles for Shorts (Vertical) */
+        .shorts-grid {
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important;
+        }
+
+        .video-item { 
+            cursor: pointer; 
+            transition: transform 0.2s;
+            position: relative;
+        }
+
+        .video-item img { 
+            width: 100%; 
+            border-radius: 12px; 
+            margin-bottom: 10px;
+        }
+
+        .video-item h3 { 
+            font-size: 14px; 
+            margin: 0; 
+            line-height: 1.4;
+            color: var(--text-main);
+        }
+
+        .delete-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            cursor: pointer;
+            display: none;
+        }
+
+        .video-item:hover .delete-btn { display: block; }
+    </style>
+</head>
+<body>
+
+<nav>
+    <h2 style="color:red; margin-left:10px;">Sahbix </h2>
+    <button onclick="showSection('home')">🏠 Home</button>
+    <button onclick="showSection('shorts')">⚡ Shorts</button>
+    <button onclick="showSection('history')">📜 History</button>
+    <hr style="border: 0; border-top: 1px solid #333; width: 100%;">
+    <div style="padding: 10px; font-size: 12px; color: #888;">
+        Server: 
+        <select id="serverSelect" style="background:#222; color:white; border:none;">
+            <option value="invidious.nerdvpn.de" selected>NerdVPN</option>
+            <option value="inv.tux.rs">Tux</option>
+            <option value="invidious.projectsegfau.lt">Segfault</option>
+        </select>
+    </div>
+</nav>
+
+<main>
+    <div class="header">
+        <div class="search-box">
+            <input type="text" id="userInput" placeholder="Search..." onkeydown="if(event.key==='Enter') fetchVideos()">
+            <button class="search-btn" onclick="fetchVideos()">🔍</button>
+        </div>
+    </div>
+
+    <div id="video-display"></div>
+
+    <h2 id="section-title">Recommended</h2>
+    <div id="results-list"></div>
+</main>
+
+<script>
+    const API_KEY = 'AIzaSyD1cXDB8ql-QReLo5WGEo-DXGBrdtPshIA'; 
+    let currentVideoId = '';
+    let history = JSON.parse(localStorage.getItem('yt_history')) || [];
+
+    async function fetchVideos(isShorts = false) {
+        const query = document.getElementById('userInput').value || (isShorts ? '#shorts' : 'New Technology');
+        const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=15&q=${encodeURIComponent(query)}&type=video&videoDuration=${isShorts ? 'short' : 'any'}&key=${API_KEY}`;
+        
+        try {
+            const response = await fetch(searchUrl);
+            const data = await response.json();
+            renderResults(data.items, isShorts);
+            document.getElementById('section-title').innerText = isShorts ? "Shorts" : "Search Results";
+        } catch (err) { console.error("API Error"); }
+    }
+
+    function renderResults(videos, isShorts = false, isHistory = false) {
+        const container = document.getElementById('results-list');
+        container.innerHTML = ''; 
+        container.className = isShorts ? 'shorts-grid' : '';
+
+        videos.forEach((item, index) => {
+            const videoId = isHistory ? item.id : item.id.videoId;
+            const title = isHistory ? item.title : item.snippet.title;
+            const thumb = isHistory ? item.thumb : item.snippet.thumbnails.medium.url;
+            const channel = isHistory ? item.channel : item.snippet.channelTitle;
+
+            const div = document.createElement('div');
+            div.className = 'video-item';
+            div.onclick = () => loadVideo(videoId, title, thumb, channel);
+            
+            let deleteHtml = isHistory ? `<button class="delete-btn" onclick="event.stopPropagation(); deleteFromHistory('${videoId}')">✕</button>` : '';
+            
+            div.innerHTML = `
+                ${deleteHtml}
+                <img src="${thumb}" style="${isShorts ? 'aspect-ratio: 9/16; object-fit: cover;' : ''}">
+                <h3>${title}</h3>
+                <p>${channel}</p>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function loadVideo(id, title, thumb, channel) {
+        currentVideoId = id;
+        const server = document.getElementById('serverSelect').value;
+        const display = document.getElementById('video-display');
+        display.style.display = 'block';
+        display.innerHTML = `<iframe src="https://${server}/embed/${id}?autoplay=1" allowfullscreen></iframe>`;
+        addToHistory({id, title, thumb, channel});
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function addToHistory(video) {
+        history = history.filter(v => v.id !== video.id);
+        history.unshift(video);
+        localStorage.setItem('yt_history', JSON.stringify(history));
+    }
+
+    function deleteFromHistory(id) {
+        history = history.filter(v => v.id !== id);
+        localStorage.setItem('yt_history', JSON.stringify(history));
+        showSection('history'); // Refresh view
+    }
+
+    function showSection(type) {
+        document.getElementById('video-display').style.display = 'none';
+        if(type === 'history') {
+            document.getElementById('section-title').innerText = "Your Watch History";
+            renderResults(history, false, true);
+        } else if (type === 'home') {
+            fetchVideos(false);
+        } else if (type === 'shorts') {
+            fetchVideos(true);
+        }
+    }
+
+    window.onload = () => fetchVideos();
+</script>
+</body>
+</html>
